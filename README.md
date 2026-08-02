@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/remarkable-chess-banner.jpeg" alt="reMarkable Chess running on a reMarkable tablet" width="100%">
+</p>
+
 # reMarkable Chess
 
 A native, offline single-player chess app for the **reMarkable 2**, built for AppLoad and backed by Stockfish. It is designed for e-ink: high-contrast pieces, a full-width board, and deliberate visible turn transitions.
