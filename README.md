@@ -1,7 +1,7 @@
 # reMarkable Chess
 
 <p align="center">
-  <img src="assets/remarkable-chess-banner-rounded-8px.png" alt="reMarkable Chess running on a reMarkable tablet" width="100%">
+  <img src="assets/remarkable-chess-banner-rounded-12px.png" alt="reMarkable Chess running on a reMarkable tablet" width="100%">
 </p>
 
 Offline single-player chess for the reMarkable 2.
