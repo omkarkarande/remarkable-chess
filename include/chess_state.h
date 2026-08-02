@@ -26,6 +26,7 @@ public:
 private:
     std::array<char, 64> board_{};
     Color sideToMove_ = Color::White;
+    int halfMoveClock_ = 0;
     int fullMoveNumber_ = 1;
     int enPassantTarget_ = -1;
     bool whiteKingMoved_ = false;

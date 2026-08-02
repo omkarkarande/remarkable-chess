@@ -11,7 +11,7 @@ class ChessSession {
 public:
     explicit ChessSession(std::filesystem::path savePath);
 
-    bool tap(const std::string& square);
+    bool tap(const std::string& square, char promotion = '\0');
     [[nodiscard]] char pieceAt(const std::string& square) const { return state_.pieceAt(square); }
     [[nodiscard]] Color sideToMove() const { return state_.sideToMove(); }
     [[nodiscard]] const std::string& selectedSquare() const { return selectedSquare_; }
@@ -22,4 +22,5 @@ private:
     std::string selectedSquare_;
 
     [[nodiscard]] bool belongsToCurrentPlayer(char piece) const;
+    [[nodiscard]] static bool isValidSquare(const std::string& square);
 };

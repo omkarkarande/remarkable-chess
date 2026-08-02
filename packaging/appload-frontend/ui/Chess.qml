@@ -75,13 +75,6 @@ Rectangle {
     function viewPiece(viewSquare) { return at(sourceSquare(viewSquare)) }
     function squareName(square) { return String.fromCharCode(97 + col(square)) + String(8 - row(square)) }
 
-    function squareIndex(notation) {
-        return (Number(notation.charAt(1)) - 1) * 8 + (notation.charCodeAt(0) - 97)
-    }
-    function promotionViewSquare() {
-        return playerSide === "b" ? 63 - squareIndex(pendingPromotionMove.substr(2, 2)) : squareIndex(pendingPromotionMove.substr(2, 2))
-    }
-
     function isPromotionMove(fromSquare, toSquare) {
         var pawn = at(fromSquare)
         if (pawn.toUpperCase() !== "P") return false
@@ -243,7 +236,6 @@ Rectangle {
         visible: root.pendingPromotionMove !== ""
         width: root.squareSize * 2
         height: root.squareSize * 2
-        property int viewSquare: root.promotionViewSquare()
         x: gameLayout.x + (root.boardSize - width) / 2
         y: gameLayout.y + 96 + (root.boardSize - height) / 2
         color: "#e8e8e1"

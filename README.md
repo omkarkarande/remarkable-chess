@@ -22,3 +22,7 @@ Offline single-player chess for the reMarkable 2.
 ## License
 
 Licensed under [GPL-2.0-or-later](LICENSE). Chess-piece attribution is in [ASSET-NOTICES.md](packaging/appload-frontend/ASSET-NOTICES.md).
+
+## Packaging status
+
+The tested integration is direct AppLoad deployment using the frontend bundle and AppLoad manifest in `packaging/appload-frontend/`. `packaging/VELBUILD` is retained only as deferred, unverified Vellum metadata; no working Vellum package is claimed.

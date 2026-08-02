@@ -7,7 +7,9 @@ upstream_author="Omi"
 category="apps"
 url="local"
 arch="armv7"
-license="MIT"
+# Deferred Vellum metadata only: direct AppLoad deployment is the tested path.
+# Do not present this recipe as device-verified Vellum packaging.
+license="GPL-2.0-or-later"
 depends="appload>=0.5.3 rm2 remarkable-os>=3.27 remarkable-os<3.28 !rmppure"
 
 package() {

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <poll.h>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -42,21 +44,38 @@ struct PacketHeader {
     std::int32_t length;
 };
 
-bool readExact(int fd, void* buffer, std::size_t length) {
-    auto* cursor = static_cast<char*>(buffer);
-    while (length > 0) {
-        const ssize_t received = recv(fd, cursor, length, 0);
-        if (received <= 0) return false;
-        cursor += received;
-        length -= static_cast<std::size_t>(received);
+bool readRecord(int fd, void* buffer, std::size_t length) {
+    iovec iov{buffer, length};
+    msghdr message{};
+    message.msg_iov = &iov;
+    message.msg_iovlen = 1;
+    for (;;) {
+        const ssize_t received = recvmsg(fd, &message, 0);
+        if (received < 0 && errno == EINTR) continue;
+        return received == static_cast<ssize_t>(length) && (message.msg_flags & MSG_TRUNC) == 0;
     }
-    return true;
+}
+
+bool sendAll(int fd, const void* buffer, std::size_t length) {
+#ifdef MSG_NOSIGNAL
+    constexpr int flags = MSG_NOSIGNAL;
+#else
+    constexpr int flags = 0;
+#endif
+    for (;;) {
+        const ssize_t sent = send(fd, buffer, length, flags);
+        if (sent < 0 && errno == EINTR) continue;
+        return sent == static_cast<ssize_t>(length);
+    }
 }
 
 bool sendMessage(int fd, std::int32_t type, const std::string& contents) {
     const PacketHeader header{type, static_cast<std::int32_t>(contents.size())};
-    return send(fd, &header, sizeof(header), 0) == static_cast<ssize_t>(sizeof(header)) &&
-           (contents.empty() || send(fd, contents.data(), contents.size(), 0) == static_cast<ssize_t>(contents.size()));
+    if (!sendAll(fd, &header, sizeof(header)) ||
+        (!contents.empty() && !sendAll(fd, contents.data(), contents.size()))) {
+        throw std::runtime_error("AppLoad coordinator disconnected");
+    }
+    return true;
 }
 
 class Stockfish {
@@ -98,11 +117,23 @@ private:
     std::string pending_;
 
     void start(const std::filesystem::path& executable) {
-        int toEngine[2]{};
-        int fromEngine[2]{};
-        if (pipe(toEngine) != 0 || pipe(fromEngine) != 0) throw std::runtime_error("Unable to create Stockfish pipes");
+        int toEngine[2]{-1, -1};
+        int fromEngine[2]{-1, -1};
+        const auto closePipe = [](int pipeFds[2]) {
+            if (pipeFds[0] >= 0) close(pipeFds[0]);
+            if (pipeFds[1] >= 0) close(pipeFds[1]);
+        };
+        if (pipe(toEngine) != 0 || pipe(fromEngine) != 0) {
+            closePipe(toEngine);
+            closePipe(fromEngine);
+            throw std::runtime_error("Unable to create Stockfish pipes");
+        }
         pid_ = fork();
-        if (pid_ < 0) throw std::runtime_error("Unable to start Stockfish");
+        if (pid_ < 0) {
+            closePipe(toEngine);
+            closePipe(fromEngine);
+            throw std::runtime_error("Unable to start Stockfish");
+        }
         if (pid_ == 0) {
             dup2(toEngine[0], STDIN_FILENO);
             dup2(fromEngine[1], STDOUT_FILENO);
@@ -115,15 +146,20 @@ private:
         close(fromEngine[1]);
         input_ = toEngine[1];
         output_ = fromEngine[0];
-        writeLine("uci");
-        waitFor("uciok");
-        writeLine("isready");
-        waitFor("readyok");
+        try {
+            writeLine("uci");
+            waitFor("uciok");
+            writeLine("isready");
+            waitFor("readyok");
+        } catch (...) {
+            stop();
+            throw;
+        }
     }
 
     void stop() {
         if (input_ >= 0) {
-            writeLine("quit");
+            try { writeLine("quit"); } catch (const std::exception&) {}
             close(input_);
             input_ = -1;
         }
@@ -132,15 +168,36 @@ private:
             output_ = -1;
         }
         if (pid_ > 0) {
-            waitpid(pid_, nullptr, 0);
+            int status = 0;
+            for (int attempts = 0; attempts < 20 && waitpid(pid_, &status, WNOHANG) == 0; ++attempts) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            if (waitpid(pid_, &status, WNOHANG) == 0) {
+                kill(pid_, SIGTERM);
+                for (int attempts = 0; attempts < 20 && waitpid(pid_, &status, WNOHANG) == 0; ++attempts) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+            }
+            if (waitpid(pid_, &status, WNOHANG) == 0) {
+                kill(pid_, SIGKILL);
+                for (int attempts = 0; attempts < 5 && waitpid(pid_, &status, WNOHANG) == 0; ++attempts) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+            }
             pid_ = -1;
         }
     }
 
     void writeLine(const std::string& line) {
         const std::string data = line + "\n";
-        if (input_ < 0 || write(input_, data.data(), data.size()) != static_cast<ssize_t>(data.size())) {
-            throw std::runtime_error("Stockfish input failed");
+        std::size_t remaining = data.size();
+        const char* cursor = data.data();
+        while (remaining > 0) {
+            const ssize_t written = write(input_, cursor, remaining);
+            if (written < 0 && errno == EINTR) continue;
+            if (written <= 0) throw std::runtime_error("Stockfish input failed");
+            cursor += written;
+            remaining -= static_cast<std::size_t>(written);
         }
     }
 
@@ -152,9 +209,20 @@ private:
                 pending_.erase(0, newline + 1);
                 return true;
             }
+            pollfd descriptor{output_, POLLIN, 0};
+            int ready = 0;
+            do {
+                ready = poll(&descriptor, 1, 5000);
+            } while (ready < 0 && errno == EINTR);
+            if (ready == 0) throw std::runtime_error("Stockfish response timed out");
+            if (ready < 0 || (descriptor.revents & POLLNVAL) != 0 ||
+                (descriptor.revents & POLLIN) == 0) {
+                throw std::runtime_error("Stockfish output failed");
+            }
             std::array<char, 512> buffer{};
             const ssize_t count = read(output_, buffer.data(), buffer.size());
-            if (count <= 0) return false;
+            if (count < 0 && errno == EINTR) continue;
+            if (count <= 0) throw std::runtime_error("Stockfish output failed");
             pending_.append(buffer.data(), static_cast<std::size_t>(count));
         }
     }
@@ -181,6 +249,10 @@ int connectToAppLoad(const char* socketPath) {
 }
 
 std::filesystem::path executableSibling(const char* argv0, const char* name) {
+    try {
+        return std::filesystem::read_symlink("/proc/self/exe").parent_path() / name;
+    } catch (const std::filesystem::filesystem_error&) {
+    }
     return std::filesystem::absolute(argv0).parent_path() / name;
 }
 
@@ -189,9 +261,14 @@ std::filesystem::path executableSibling(const char* argv0, const char* name) {
 int main(int argc, char* argv[]) {
     if (argc != 2) return 2;
     try {
+        std::signal(SIGPIPE, SIG_IGN);
         const int socketFd = connectToAppLoad(argv[1]);
-        const auto savePath = std::filesystem::path("/home/root/.config/remarkable-chess/game.fen");
-        const auto playerSidePath = std::filesystem::path("/home/root/.config/remarkable-chess/player-side");
+        const auto configDirectory = std::filesystem::path("/home/root/.config/remarkable-chess");
+        std::error_code configError;
+        std::filesystem::create_directories(configDirectory, configError);
+        if (configError) throw std::runtime_error("Unable to create chess configuration directory");
+        const auto savePath = configDirectory / "game.fen";
+        const auto playerSidePath = configDirectory / "player-side";
         ChessState game = ChessState::loadOrNew(savePath);
         Stockfish engine(executableSibling(argv[0], "stockfish"));
         std::vector<ChessState> history;
@@ -235,20 +312,24 @@ int main(int argc, char* argv[]) {
             playerSide = std::uniform_int_distribution<int>(0, 1)(randomEngine) == 0 ? Color::White : Color::Black;
             {
                 std::ofstream output(playerSidePath, std::ios::trunc);
+                if (!output) throw std::runtime_error("Unable to write player side");
                 output << (playerSide == Color::White ? 'w' : 'b') << '\n';
+                output.flush();
+                if (!output) throw std::runtime_error("Unable to write player side");
             }
             game.save(savePath);
             sendState();
+            sendMessage(socketFd, kStatusUpdate, turnStatus());
             // The frontend schedules the one-second engine opening when needed.
             // Avoid a burst of extra AppLoad messages while it is reconstructing the board.
         };
 
         for (;;) {
             PacketHeader header{};
-            if (!readExact(socketFd, &header, sizeof(header))) break;
+            if (!readRecord(socketFd, &header, sizeof(header))) break;
             if (header.length < 0 || header.length > 1024) break;
             std::string contents(static_cast<std::size_t>(header.length), '\0');
-            if (header.length > 0 && !readExact(socketFd, contents.data(), contents.size())) break;
+            if (header.length > 0 && !readRecord(socketFd, contents.data(), contents.size())) break;
             if (header.type == kSystemTerminate) break;
             if (header.type == kSystemNewCoordinator) {
                 sendState();
@@ -257,8 +338,12 @@ int main(int argc, char* argv[]) {
             }
             if (header.type == kSetSkillLevel) {
                 try {
-                    const int level = std::stoi(contents);
-                    if (level < 0 || level > 20) throw std::out_of_range("skill level");
+                    int level = 0;
+                    const auto result = std::from_chars(contents.data(), contents.data() + contents.size(), level);
+                    if (result.ec != std::errc{} || result.ptr != contents.data() + contents.size() ||
+                        level < 0 || level > 20) {
+                        throw std::out_of_range("skill level");
+                    }
                     engine.setSkillLevel(level);
                     sendMessage(socketFd, kStatusUpdate, "Skill level " + std::to_string(level));
                 } catch (...) {

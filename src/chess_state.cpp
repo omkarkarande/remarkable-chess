@@ -86,6 +86,8 @@ bool ChessState::tryMove(const std::string& fromNotation, const std::string& toN
         board_[rookFrom] = kEmpty;
         if (movingSide == Color::White) { whiteKingMoved_ = true; }
         else { blackKingMoved_ = true; }
+        enPassantTarget_ = -1;
+        ++halfMoveClock_;
         if (sideToMove_ == Color::Black) ++fullMoveNumber_;
         sideToMove_ = opponent;
         return true;
@@ -113,6 +115,7 @@ bool ChessState::tryMove(const std::string& fromNotation, const std::string& toN
 
     const int enPassantCaptured = rankOf(from) * 8 + fileOf(to);
     const char capturedEnPassantPawn = enPassant ? board_[enPassantCaptured] : kEmpty;
+    const bool capture = destination != kEmpty || enPassant;
     board_[to] = piece;
     board_[from] = kEmpty;
     if (enPassant) board_[enPassantCaptured] = kEmpty;
@@ -131,6 +134,7 @@ bool ChessState::tryMove(const std::string& fromNotation, const std::string& toN
 
     enPassantTarget_ = (std::tolower(piece) == 'p' && std::abs(rankOf(to) - rankOf(from)) == 2)
         ? (rankOf(from) + rankOf(to)) / 2 * 8 + fileOf(from) : -1;
+    halfMoveClock_ = std::tolower(piece) == 'p' || capture ? 0 : halfMoveClock_ + 1;
 
     if (piece == 'K') whiteKingMoved_ = true;
     if (piece == 'k') blackKingMoved_ = true;
@@ -184,7 +188,7 @@ std::string ChessState::fen() const {
     if (!blackKingMoved_ && !blackQueenRookMoved_) castling += 'q';
     const std::string enPassant = enPassantTarget_ < 0 ? "-" :
         std::string{static_cast<char>('a' + fileOf(enPassantTarget_)), static_cast<char>('1' + rankOf(enPassantTarget_))};
-    output << (sideToMove_ == Color::White ? " w " : " b ") << (castling.empty() ? "-" : castling) << " " << enPassant << " 0 " << fullMoveNumber_;
+    output << (sideToMove_ == Color::White ? " w " : " b ") << (castling.empty() ? "-" : castling) << " " << enPassant << " " << halfMoveClock_ << " " << fullMoveNumber_;
     return output.str();
 }
 
@@ -233,7 +237,7 @@ ChessState ChessState::fromFen(const std::string& fenText) {
     int halfMove = 0;
     int fullMove = 0;
     if (!(input >> placement >> side >> castling >> enPassant >> halfMove >> fullMove) ||
-        (side != "w" && side != "b") || fullMove < 1) {
+        (side != "w" && side != "b") || halfMove < 0 || fullMove < 1) {
         throw std::runtime_error("Invalid FEN");
     }
 
@@ -263,7 +267,22 @@ ChessState ChessState::fromFen(const std::string& fenText) {
     if (rank != 0 || file != 8) {
         throw std::runtime_error("Incomplete FEN placement");
     }
+    int whiteKings = 0;
+    int blackKings = 0;
+    for (int square = 0; square < 64; ++square) {
+        const char piece = state.board_[square];
+        if (piece == 'K') ++whiteKings;
+        if (piece == 'k') ++blackKings;
+        if (std::tolower(static_cast<unsigned char>(piece)) == 'p' &&
+            (rankOf(square) == 0 || rankOf(square) == 7)) {
+            throw std::runtime_error("Invalid FEN pawn rank");
+        }
+    }
+    if (whiteKings != 1 || blackKings != 1) {
+        throw std::runtime_error("Invalid FEN king count");
+    }
     state.sideToMove_ = side == "w" ? Color::White : Color::Black;
+    state.halfMoveClock_ = halfMove;
     state.fullMoveNumber_ = fullMove;
     if (enPassant != "-") {
         int target = -1;

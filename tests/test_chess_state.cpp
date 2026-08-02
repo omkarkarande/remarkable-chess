@@ -95,6 +95,59 @@ void test_castling_moves_the_rook_with_the_king() {
     assert(game.pieceAt("h1") == '.');
 }
 
+void test_castling_clears_an_existing_en_passant_target() {
+    const auto savePath = std::filesystem::temp_directory_path() / "remarkable-chess-castling-en-passant-test.fen";
+    {
+        std::ofstream output(savePath);
+        output << "4k3/8/8/8/8/8/8/R3K2R w K e3 12 7\n";
+    }
+
+    ChessState game = ChessState::loadOrNew(savePath);
+    assert(game.tryMove("e1", "g1"));
+    assert(game.fen() == "4k3/8/8/8/8/8/8/R4RK1 b - - 13 7");
+    std::filesystem::remove(savePath);
+}
+
+void test_halfmove_clock_updates_and_round_trips_through_fen() {
+    const auto savePath = std::filesystem::temp_directory_path() / "remarkable-chess-halfmove-test.fen";
+    {
+        std::ofstream output(savePath);
+        output << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 17 9\n";
+    }
+
+    ChessState game = ChessState::loadOrNew(savePath);
+    assert(game.fen() == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 17 9");
+    assert(game.tryMove("g1", "f3"));
+    assert(game.fen().find(" - 18 9") != std::string::npos);
+    assert(game.tryMove("g8", "f6"));
+    assert(game.fen().find(" - 19 10") != std::string::npos);
+    assert(game.tryMove("e2", "e4"));
+    assert(game.fen().find(" e3 0 10") != std::string::npos);
+    assert(game.tryMove("f6", "e4"));
+    assert(game.fen().find(" - 0 11") != std::string::npos);
+    game.save(savePath);
+    assert(ChessState::loadOrNew(savePath).fen() == game.fen());
+    std::filesystem::remove(savePath);
+}
+
+void test_invalid_semantic_fen_falls_back_to_a_new_game() {
+    const auto savePath = std::filesystem::temp_directory_path() / "remarkable-chess-invalid-fen-test.fen";
+    const std::string initialFen = ChessState::newGame().fen();
+
+    {
+        std::ofstream output(savePath);
+        output << "8/8/8/8/8/8/8/4K3 w - - 0 1\n";
+    }
+    assert(ChessState::loadOrNew(savePath).fen() == initialFen);
+
+    {
+        std::ofstream output(savePath, std::ios::trunc);
+        output << "4k3/8/8/8/8/8/8/P3K3 w - - 0 1\n";
+    }
+    assert(ChessState::loadOrNew(savePath).fen() == initialFen);
+    std::filesystem::remove(savePath);
+}
+
 void test_stalemate_is_not_checkmate() {
     const auto savePath = std::filesystem::temp_directory_path() / "remarkable-chess-stalemate-test.fen";
     {
@@ -136,6 +189,9 @@ int main() {
     test_checkmate_has_no_legal_move();
     test_en_passant_captures_a_pawn_after_its_two_square_advance();
     test_castling_moves_the_rook_with_the_king();
+    test_castling_clears_an_existing_en_passant_target();
+    test_halfmove_clock_updates_and_round_trips_through_fen();
+    test_invalid_semantic_fen_falls_back_to_a_new_game();
     test_stalemate_is_not_checkmate();
     test_promotion_requires_an_explicit_choice_and_uses_it();
     std::cout << "chess state tests passed\n";
