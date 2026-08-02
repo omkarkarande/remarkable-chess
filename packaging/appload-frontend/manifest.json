@@ -1,0 +1,8 @@
+{
+  "name": "Chess",
+  "id": "omi.remarkable-chess",
+  "loadsBackend": true,
+  "entry": "/ui/Chess.qml",
+  "supportsScaling": true,
+  "canHaveMultipleFrontends": false
+}

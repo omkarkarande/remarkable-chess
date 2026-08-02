@@ -1,0 +1,24 @@
+maintainer="Omi"
+pkgname=remarkable-chess
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Offline chess game for reMarkable 2"
+upstream_author="Omi"
+category="apps"
+url="local"
+arch="armv7"
+license="MIT"
+depends="appload>=0.5.3 rm2 remarkable-os>=3.27 remarkable-os<3.28 !rmppure"
+
+package() {
+    install -Dm755 "$startdir/remarkable_chess" \
+        "$pkgdir/home/root/xovi/exthome/appload/remarkable-chess/remarkable_chess"
+    install -Dm644 "$startdir/icon.png" \
+        "$pkgdir/home/root/xovi/exthome/appload/remarkable-chess/icon.png"
+    install -Dm644 "$startdir/external.manifest.armv7.json" \
+        "$pkgdir/home/root/xovi/exthome/appload/remarkable-chess/external.manifest.json"
+    install -Dm644 "$startdir/LICENSE" \
+        "$pkgdir/home/root/.vellum/licenses/$pkgname/LICENSE"
+    echo "local build; source is /Users/omi/Workspaces/remarkable-chess" > \
+        "$pkgdir/home/root/.vellum/licenses/$pkgname/SOURCES"
+}

@@ -1,0 +1,10 @@
+build/
+build-*/
+dist/
+packaging/vellum/remarkable_chess
+packaging/vellum/icon.png
+packaging/vellum/external.manifest.armv7.json
+packaging/vellum/LICENSE
+packaging/keys/
+*.fen
+.DS_Store

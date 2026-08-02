@@ -1,0 +1,18 @@
+<RCC>
+  <qresource>
+    <file>ui/Chess.qml</file>
+    <file>ui/undo-icon.png</file>
+    <file>ui/pieces/wK.png</file>
+    <file>ui/pieces/wQ.png</file>
+    <file>ui/pieces/wR.png</file>
+    <file>ui/pieces/wB.png</file>
+    <file>ui/pieces/wN.png</file>
+    <file>ui/pieces/wP.png</file>
+    <file>ui/pieces/bK.png</file>
+    <file>ui/pieces/bQ.png</file>
+    <file>ui/pieces/bR.png</file>
+    <file>ui/pieces/bB.png</file>
+    <file>ui/pieces/bN.png</file>
+    <file>ui/pieces/bP.png</file>
+  </qresource>
+</RCC>
