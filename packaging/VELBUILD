@@ -1,6 +1,6 @@
 maintainer="Omi <omkar.karande@outlook.com>"
 pkgname=remarkable-chess
-pkgver=0.1.0_rc9
+pkgver=0.1.0_rc10
 pkgrel=0
 pkgdesc="Offline single-player chess for reMarkable 2"
 upstream_author="omkarkarande"
@@ -8,15 +8,15 @@ category="apps"
 url="https://github.com/omkarkarande/remarkable-chess"
 arch="armv7"
 license="GPL-2.0-or-later"
-readmeurl="https://raw.githubusercontent.com/omkarkarande/remarkable-chess/v0.1.0-rc.9/README.md"
+readmeurl="https://raw.githubusercontent.com/omkarkarande/remarkable-chess/v0.1.0-rc.10/README.md"
 depends="appload>=0.5.3 rm2 remarkable-os>=3.27 remarkable-os<3.28 !rmppure"
 
-_release_tag="v0.1.0-rc.9"
-_release_archive="remarkable-chess-rm2-v0.1.0-rc.9.tar.gz"
+_release_tag="v0.1.0-rc.10"
+_release_archive="remarkable-chess-rm2-v0.1.0-rc.10.tar.gz"
 source="$_release_archive::https://github.com/omkarkarande/remarkable-chess/releases/download/$_release_tag/$_release_archive"
 
 package() {
-    payload="$srcdir/remarkable-chess-rm2-v0.1.0-rc.9"
+    payload="$srcdir/remarkable-chess-rm2-v0.1.0-rc.10"
     app_root="$pkgdir/home/root/xovi/exthome/appload/$pkgname"
     licenses="$pkgdir/home/root/.vellum/licenses/$pkgname"
 
@@ -33,5 +33,5 @@ package() {
     printf '%s\n' "https://github.com/omkarkarande/remarkable-chess/releases/tag/$_release_tag" \
         > "$licenses/SOURCES"
 }
-sha512sums='e75a0686a74ebfa83f679950f99cf63118672a5258091d2889034ab2b05cb23240464c84e7999504f59f971a60c1e13f7e187ecff13be78e94a74cf05176f169
-remarkable-chess-rm2-v0.1.0-rc.9.tar.gz'
+sha512sums='189f7824ebce994dd4e14b3a6084a834ac4e80aa06d6ba8b0fb0129f5853fbaea4436730aeebbfa6aab613ee6549c52a1f445ffcebaf100baadf9d90c85b64d3
+remarkable-chess-rm2-v0.1.0-rc.10.tar.gz'
