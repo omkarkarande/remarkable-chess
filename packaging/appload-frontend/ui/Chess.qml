@@ -15,7 +15,8 @@ Rectangle {
     property string playerSide: "w"
     property int selected: -1
     property string pendingPromotionMove: ""
-    property string message: "Connecting…"
+    property string message: "Starting chess engine…"
+    property bool backendReady: false
     property string checkedSide: ""
     property string gameOver: ""
     property int skillLevel: 3
@@ -27,7 +28,10 @@ Rectangle {
         id: backend
         applicationID: "omi.remarkable-chess"
         onMessageReceived: (type, contents) => {
-            if (type === 101) root.applyFen(contents)
+            if (type === 101 && root.applyFen(contents)) {
+                root.message = root.turn === "w" ? "White to move" : "Black to move"
+                root.backendReady = true
+            }
             else if (type === 102) root.message = contents
             else if (type === 103) root.checkedSide = contents
             else if (type === 104) root.playerSide = contents
@@ -37,34 +41,40 @@ Rectangle {
 
     Timer {
         // Leave enough time for the player frame to become visible on e-ink.
-        interval: 1500
+        interval: 1000
         repeat: false
-        running: root.turn !== root.playerSide && root.gameOver === ""
+        running: root.backendReady && root.turn !== root.playerSide && root.gameOver === ""
         onTriggered: backend.sendMessage(14, "go")
     }
 
     function applyFen(fen) {
         var fields = fen.split(" ")
-        if (fields.length < 2) return
+        if (fields.length < 2 || (fields[1] !== "w" && fields[1] !== "b")) return false
         var ranks = fields[0].split("/")
-        if (ranks.length !== 8) return
+        if (ranks.length !== 8) return false
         var next = ""
-        for (var rank = 7; rank >= 0; --rank) {
-            var text = ranks[7 - rank]
+        for (var rank = 0; rank < 8; ++rank) {
+            var text = ranks[rank]
+            var expanded = 0
             for (var i = 0; i < text.length; ++i) {
                 var ch = text.charAt(i)
                 if (ch >= "1" && ch <= "8") {
                     for (var empty = 0; empty < Number(ch); ++empty) next += " "
-                } else {
+                    expanded += Number(ch)
+                } else if ((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z")) {
                     next += ch
-                }
+                    ++expanded
+                } else return false
             }
+            if (expanded !== 8) return false
         }
-        if (next.length === 64) pieces = next
+        if (next.length !== 64) return false
+        pieces = next
         turn = fields[1]
         selected = -1
         pendingPromotionMove = ""
         gameOver = ""
+        return true
     }
 
     function isWhite(piece) { return piece >= "A" && piece <= "Z" }
@@ -89,7 +99,7 @@ Rectangle {
 
     function tap(viewSquare) {
         var square = sourceSquare(viewSquare)
-        if (pendingPromotionMove !== "" || gameOver !== "" || turn !== playerSide) return
+        if (!backendReady || pendingPromotionMove !== "" || gameOver !== "" || turn !== playerSide) return
         var piece = at(square)
         if (selected < 0) {
             if (piece !== " " && (isWhite(piece) ? "w" : "b") === playerSide) {
@@ -213,8 +223,6 @@ Rectangle {
                             height: parent.height * 0.82
                             source: root.pieceSource(root.at(parent.source))
                             fillMode: Image.PreserveAspectFit
-                            smooth: true
-                            mipmap: true
                         }
                         MouseArea { anchors.fill: parent; onClicked: root.tap(index) }
                     }

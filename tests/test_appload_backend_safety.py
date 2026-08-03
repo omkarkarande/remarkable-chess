@@ -37,10 +37,16 @@ class AppLoadBackendSafetyContractTests(unittest.TestCase):
         self.assertNotIn("bool readExact", BACKEND)
 
     def test_stockfish_response_wait_is_bounded(self):
-        self.assertIn("poll(&descriptor, 1, 5000)", BACKEND)
+        self.assertIn("poll(&descriptor, 1, timeoutMs)", BACKEND)
         self.assertIn("Stockfish response timed out", BACKEND)
         self.assertIn("(descriptor.revents & POLLIN) == 0", BACKEND)
         self.assertNotIn("POLLERR | POLLHUP | POLLNVAL", BACKEND)
+
+    def test_stockfish_cold_start_allows_time_to_create_embedded_network_cache(self):
+        self.assertIn("constexpr int kStockfishStartupTimeoutMs = 20000", BACKEND)
+        self.assertIn('waitFor("uciok", kStockfishStartupTimeoutMs)', BACKEND)
+        self.assertIn('waitFor("readyok", kStockfishStartupTimeoutMs)', BACKEND)
+        self.assertIn("bool readLine(std::string& line, int timeoutMs = 5000)", BACKEND)
 
 
 if __name__ == "__main__":

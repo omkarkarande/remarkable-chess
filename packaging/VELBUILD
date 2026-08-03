@@ -1,26 +1,37 @@
-maintainer="Omi"
+maintainer="Omi <omkar.karande@outlook.com>"
 pkgname=remarkable-chess
-pkgver=0.1.0
+pkgver=0.1.0_rc8
 pkgrel=0
-pkgdesc="Offline chess game for reMarkable 2"
-upstream_author="Omi"
+pkgdesc="Offline single-player chess for reMarkable 2"
+upstream_author="omkarkarande"
 category="apps"
-url="local"
+url="https://github.com/omkarkarande/remarkable-chess"
 arch="armv7"
-# Deferred Vellum metadata only: direct AppLoad deployment is the tested path.
-# Do not present this recipe as device-verified Vellum packaging.
 license="GPL-2.0-or-later"
+readmeurl="https://raw.githubusercontent.com/omkarkarande/remarkable-chess/v0.1.0-rc.8/README.md"
 depends="appload>=0.5.3 rm2 remarkable-os>=3.27 remarkable-os<3.28 !rmppure"
 
+_release_tag="v0.1.0-rc.8"
+_release_archive="remarkable-chess-rm2-v0.1.0-rc.8.tar.gz"
+source="$_release_archive::https://github.com/omkarkarande/remarkable-chess/releases/download/$_release_tag/$_release_archive"
+
 package() {
-    install -Dm755 "$startdir/remarkable_chess" \
-        "$pkgdir/home/root/xovi/exthome/appload/remarkable-chess/remarkable_chess"
-    install -Dm644 "$startdir/icon.png" \
-        "$pkgdir/home/root/xovi/exthome/appload/remarkable-chess/icon.png"
-    install -Dm644 "$startdir/external.manifest.armv7.json" \
-        "$pkgdir/home/root/xovi/exthome/appload/remarkable-chess/external.manifest.json"
-    install -Dm644 "$startdir/LICENSE" \
-        "$pkgdir/home/root/.vellum/licenses/$pkgname/LICENSE"
-    echo "local build; source is /Users/omi/Workspaces/remarkable-chess" > \
-        "$pkgdir/home/root/.vellum/licenses/$pkgname/SOURCES"
+    payload="$srcdir/remarkable-chess-rm2-v0.1.0-rc.8"
+    app_root="$pkgdir/home/root/xovi/exthome/appload/$pkgname"
+    licenses="$pkgdir/home/root/.vellum/licenses/$pkgname"
+
+    install -Dm755 "$payload/backend/entry" "$app_root/backend/entry"
+    install -Dm755 "$payload/backend/stockfish" "$app_root/backend/stockfish"
+    install -Dm644 "$payload/resources.rcc" "$app_root/resources.rcc"
+    install -Dm644 "$payload/manifest.json" "$app_root/manifest.json"
+    install -Dm644 "$payload/icon.png" "$app_root/icon.png"
+
+    install -Dm644 "$payload/LICENSE" "$licenses/LICENSE"
+    install -Dm644 "$payload/ASSET-NOTICES.md" "$licenses/ASSET-NOTICES.md"
+    install -Dm644 "$payload/SHA256SUMS" "$licenses/PAYLOAD-SHA256SUMS"
+    install -Dm644 "$payload/BUILD-PROVENANCE.json" "$licenses/BUILD-PROVENANCE.json"
+    printf '%s\n' "https://github.com/omkarkarande/remarkable-chess/releases/tag/$_release_tag" \
+        > "$licenses/SOURCES"
 }
+sha512sums='cee6b906695ab9990bdbd8d74758293ef32fffae0c13df47497fde2ff62e4efbfb97eb934fd9d7e030ffe4bd63d96541b332d84cee82ce01afbbf0ed6f0b6672
+remarkable-chess-rm2-v0.1.0-rc.8.tar.gz'

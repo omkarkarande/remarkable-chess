@@ -38,6 +38,7 @@ constexpr std::int32_t kStatusUpdate = 102;
 constexpr std::int32_t kCheckUpdate = 103;
 constexpr std::int32_t kPlayerSideUpdate = 104;
 constexpr std::int32_t kGameOverUpdate = 105;
+constexpr int kStockfishStartupTimeoutMs = 20000;
 
 struct PacketHeader {
     std::int32_t type;
@@ -148,9 +149,9 @@ private:
         output_ = fromEngine[0];
         try {
             writeLine("uci");
-            waitFor("uciok");
+            waitFor("uciok", kStockfishStartupTimeoutMs);
             writeLine("isready");
-            waitFor("readyok");
+            waitFor("readyok", kStockfishStartupTimeoutMs);
         } catch (...) {
             stop();
             throw;
@@ -201,7 +202,7 @@ private:
         }
     }
 
-    bool readLine(std::string& line) {
+    bool readLine(std::string& line, int timeoutMs = 5000) {
         for (;;) {
             const auto newline = pending_.find('\n');
             if (newline != std::string::npos) {
@@ -212,7 +213,7 @@ private:
             pollfd descriptor{output_, POLLIN, 0};
             int ready = 0;
             do {
-                ready = poll(&descriptor, 1, 5000);
+                ready = poll(&descriptor, 1, timeoutMs);
             } while (ready < 0 && errno == EINTR);
             if (ready == 0) throw std::runtime_error("Stockfish response timed out");
             if (ready < 0 || (descriptor.revents & POLLNVAL) != 0 ||
@@ -227,25 +228,29 @@ private:
         }
     }
 
-    void waitFor(const std::string& expected) {
+    void waitFor(const std::string& expected, int timeoutMs = 5000) {
         std::string line;
-        while (readLine(line)) if (line == expected) return;
+        while (readLine(line, timeoutMs)) if (line == expected) return;
         throw std::runtime_error("Stockfish startup failed");
     }
 };
 
 int connectToAppLoad(const char* socketPath) {
-    const int socketFd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-    if (socketFd < 0) throw std::runtime_error("Unable to create AppLoad socket");
     sockaddr_un address{};
     address.sun_family = AF_UNIX;
     if (std::string(socketPath).size() >= sizeof(address.sun_path)) throw std::runtime_error("AppLoad socket path too long");
     std::snprintf(address.sun_path, sizeof(address.sun_path), "%s", socketPath);
-    if (connect(socketFd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+    // AppLoad starts this child just before binding its socket; retry that short race only.
+    for (int attempt = 0; attempt < 40; ++attempt) {
+        const int socketFd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+        if (socketFd < 0) throw std::runtime_error("Unable to create AppLoad socket");
+        if (connect(socketFd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0) return socketFd;
+        const int error = errno;
         close(socketFd);
-        throw std::runtime_error("Unable to connect to AppLoad");
+        if (error != ENOENT && error != ECONNREFUSED) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    return socketFd;
+    throw std::runtime_error("Unable to connect to AppLoad");
 }
 
 std::filesystem::path executableSibling(const char* argv0, const char* name) {

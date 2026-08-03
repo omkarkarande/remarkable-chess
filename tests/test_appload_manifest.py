@@ -39,7 +39,7 @@ class ApploadFrontendManifestTests(unittest.TestCase):
         # AppLoad receives the compiled QRC bundle, not loose QML files alone.
         self.assertGreater((self.app_root / "resources.rcc").stat().st_size, 0)
 
-    def test_direct_appload_deployment_contract_is_canonical(self):
+    def test_vellum_release_artifact_contract_is_canonical(self):
         packaging = self.repository_root / "packaging"
         external_manifest = json.loads((packaging / "external.manifest.armv7.json").read_text())
         velbuild = (packaging / "VELBUILD").read_text()
@@ -48,8 +48,13 @@ class ApploadFrontendManifestTests(unittest.TestCase):
         self.assertTrue(external_manifest["qtfb"])
         self.assertEqual("software", external_manifest["environment"]["QT_QUICK_BACKEND"])
         self.assertIn('license="GPL-2.0-or-later"', velbuild)
-        self.assertIn("/home/root/xovi/exthome/appload/remarkable-chess/remarkable_chess", velbuild)
-        self.assertIn("/home/root/xovi/exthome/appload/remarkable-chess/external.manifest.json", velbuild)
+        self.assertIn("releases/download/$_release_tag/$_release_archive", velbuild)
+        self.assertIn('install -Dm755 "$payload/backend/entry"', velbuild)
+        self.assertIn('install -Dm755 "$payload/backend/stockfish"', velbuild)
+        self.assertIn("/home/root/xovi/exthome/appload/$pkgname", velbuild)
+        self.assertNotIn("nn-ab28990d4ea3.nnue", velbuild)
+        self.assertNotIn("image=", velbuild)
+        self.assertNotIn("build()", velbuild)
         self.assertFalse((packaging / "vellum" / "VELBUILD").exists())
 
     def test_frontend_delegates_game_state_and_controls_to_backend(self):
@@ -62,6 +67,23 @@ class ApploadFrontendManifestTests(unittest.TestCase):
         self.assertIn("type === 104", qml)
         self.assertIn("type === 105", qml)
         self.assertIn("CHECKMATE", qml)
+
+    def test_frontend_explains_cold_engine_initialization_and_uses_one_second_reply_delay(self):
+        qml = (self.app_root / "ui" / "Chess.qml").read_text()
+
+        self.assertIn("interval: 1000", qml)
+        self.assertNotIn("interval: 0", qml)
+        self.assertIn('backend.sendMessage(14, "go")', qml)
+
+    def test_frontend_blocks_moves_until_backend_state_arrives(self):
+        qml = (self.app_root / "ui" / "Chess.qml").read_text()
+
+        self.assertIn("property bool backendReady: false", qml)
+        self.assertIn('if (type === 101 && root.applyFen(contents))', qml)
+        self.assertIn('root.message = root.turn === "w" ? "White to move" : "Black to move"', qml)
+        self.assertIn("if (expanded !== 8) return false", qml)
+        self.assertIn("running: root.backendReady && root.turn !== root.playerSide", qml)
+        self.assertIn("if (!backendReady || pendingPromotionMove", qml)
 
     def test_frontend_offers_all_promotion_choices_before_sending_the_move(self):
         qml = (self.app_root / "ui" / "Chess.qml").read_text()
