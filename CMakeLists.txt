@@ -26,21 +26,3 @@ if(BUILD_TESTING)
     target_link_libraries(test_chess_session PRIVATE chess_core)
     add_test(NAME chess_session COMMAND test_chess_session)
 endif()
-
-option(BUILD_REMARKABLE_APP "Build the Qt Quick application" ON)
-if(BUILD_REMARKABLE_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Quick)
-    qt_standard_project_setup(REQUIRES 6.5)
-
-    qt_add_executable(remarkable_chess
-        src/main.cpp
-        src/chess_controller.cpp
-        include/chess_controller.h
-    )
-    qt_add_qml_module(remarkable_chess
-        URI Omi.RemarkableChess
-        VERSION 1.0
-        QML_FILES qml/Main.qml
-    )
-    target_link_libraries(remarkable_chess PRIVATE chess_core Qt6::Quick)
-endif()
